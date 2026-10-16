@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SN 条码批量生成器</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: "Microsoft YaHei", system-ui, sans-serif;
+    background: #f4f6f9; color: #1f2937;
+  }
+  header {
+    background: #1e3a5f; color: #fff; padding: 18px 28px;
+  }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header p { margin: 4px 0 0; font-size: 13px; opacity: .8; }
+  .wrap { max-width: 1100px; margin: 24px auto; padding: 0 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .card { background: #fff; border-radius: 10px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .card h2 { margin: 0 0 14px; font-size: 15px; color: #1e3a5f; }
+  textarea {
+    width: 100%; height: 240px; resize: vertical; padding: 12px;
+    border: 1px solid #cbd5e1; border-radius: 8px; font-family: Consolas, monospace;
+    font-size: 14px; line-height: 1.6;
+  }
+  textarea:focus { outline: none; border-color: #2563eb; }
+  .hint { font-size: 12px; color: #64748b; margin: 8px 0 0; }
+  .row { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; align-items: center; }
+  button {
+    border: none; border-radius: 8px; padding: 10px 18px; font-size: 14px;
+    cursor: pointer; font-family: inherit; transition: .15s;
+  }
+  .primary { background: #2563eb; color: #fff; }
+  .primary:hover { background: #1d4ed8; }
+  .primary:disabled { background: #93c5fd; cursor: not-allowed; }
+  .ghost { background: #eef2f7; color: #334155; }
+  .ghost:hover { background: #e2e8f0; }
+  .file-label {
+    background: #eef2f7; color: #334155; border-radius: 8px; padding: 10px 18px;
+    font-size: 14px; cursor: pointer;
+  }
+  .file-label:hover { background: #e2e8f0; }
+  input[type=file] { display: none; }
+  .opts { display: grid; grid-template-columns: auto 1fr auto; gap: 10px 12px; align-items: center; font-size: 13px; }
+  .opts input[type=range] { width: 100%; }
+  .opts .val { font-family: Consolas, monospace; color: #2563eb; min-width: 58px; text-align: right; }
+  .preview-box {
+    border: 1px dashed #cbd5e1; border-radius: 8px; min-height: 150px;
+    display: flex; align-items: center; justify-content: center; background: #fff;
+    overflow: auto; padding: 10px;
+  }
+  .preview-box svg { max-width: 100%; height: auto; }
+  .preview-box img { max-width: 100%; height: auto; }
+  .preview-box .empty { color: #94a3b8; font-size: 13px; }
+  .msg { margin-top: 12px; font-size: 13px; }
+  .msg.err { color: #dc2626; }
+  .msg.ok { color: #16a34a; }
+  .count-badge { background:#eff6ff; color:#1d4ed8; border-radius:999px; padding:2px 10px; font-size:12px; margin-left:8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>SN 条码批量生成器</h1>
+  <p>输入纯数字 SN · 批量生成 Code128 条码 · 导出 SVG 文本压缩包（长数字不丢失）</p>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h2>1. 输入 SN <span id="countBadge" class="count-badge">0 个</span></h2>
+    <textarea id="sns" placeholder="每行一个 SN，例如：&#10;2241122660700591&#10;2241122660700592&#10;也可从 Excel 复制一列粘贴进来"></textarea>
+    <p class="hint">支持换行 / 逗号 / 空格分隔；自动去重，仅保留数字或字母。文本文件内容会追加到输入框。</p>
+    <div class="row">
+      <label class="file-label">导入 TXT / CSV 文件
+        <input type="file" id="file" accept=".txt,.csv" />
+      </label>
+      <button class="ghost" id="clearBtn">清空</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. 条码参数</h2>
+    <div class="opts">
+      <label>左右静区</label>
+      <input type="range" id="quiet_zone" min="2" max="10" step="0.5" value="2" />
+      <span class="val" id="quiet_zone_v">2.0 mm</span>
+
+      <label>条码高度</label>
+      <input type="range" id="module_height" min="8" max="40" step="1" value="15" />
+      <span class="val" id="module_height_v">15 mm</span>
+
+      <label>线条宽度</label>
+      <input type="range" id="module_width" min="0.15" max="0.6" step="0.05" value="0.3" />
+      <span class="val" id="module_width_v">0.30 mm</span>
+
+      <label>文字大小</label>
+      <input type="range" id="font_size" min="6" max="20" step="1" value="10" />
+      <span class="val" id="font_size_v">10 pt</span>
+    </div>
+    <p class="hint">黑条白底，SVG 矢量按比例缩放打印，任意尺寸都清晰。</p>
+  </div>
+
+  <div class="card">
+    <h2>3. 效果预览</h2>
+    <div class="preview-box" id="preview"><span class="empty">输入第一个 SN 后自动预览</span></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. 批量生成</h2>
+    <p class="hint">点击后生成 <code>sn-barcodes.zip</code>，内含每个 SN 的 <code>SN.svg</code> 和一个 <code>SN列表.txt</code>。</p>
+    <div class="row">
+      <button class="primary" id="genBtn">生成并下载 ZIP</button>
+    </div>
+    <form id="genForm" method="POST" action="/api/generate" style="display:none">
+      <input type="hidden" name="sns" id="formSns" />
+      <input type="hidden" name="quiet_zone" id="formQuiet" />
+      <input type="hidden" name="module_height" id="formHeight" />
+      <input type="hidden" name="module_width" id="formWidth" />
+      <input type="hidden" name="font_size" id="formFont" />
+    </form>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const opts = { quiet_zone: 2, module_height: 15, module_width: 0.3, font_size: 10 };
+
+function query() {
+  return new URLSearchParams(opts).toString();
+}
+
+function parseList(text) {
+  return text.split(/[\s,;]+/).map(s => s.trim()).filter(Boolean);
+}
+
+function refreshCount() {
+  const list = parseList($("sns").value);
+  const valid = list.filter(s => /^[0-9A-Za-z]+$/.test(s));
+  const uniq = new Set(valid);
+  $("countBadge").textContent = uniq.size + " 个";
+  return [...uniq];
+}
+
+function updatePreview() {
+  const uniq = refreshCount();
+  const box = $("preview");
+  if (!uniq.length) {
+    box.innerHTML = '<span class="empty">输入第一个 SN 后自动预览</span>';
+    return;
+  }
+  const img = document.createElement("img");
+  img.alt = "SN:" + uniq[0];
+  img.onerror = () => { box.innerHTML = '<span class="empty">预览失败</span>'; };
+  img.src = "/api/preview?sn=" + encodeURIComponent(uniq[0]) + "&" + query() + "&t=" + Date.now();
+  box.innerHTML = "";
+  box.appendChild(img);
+}
+
+function bindRange(id, unit, digits) {
+  const el = $(id), out = $(id + "_v");
+  const sync = () => {
+    opts[id] = parseFloat(el.value);
+    out.textContent = Number(el.value).toFixed(digits).replace(/\.0+$/, "") + " " + unit;
+    updatePreview();
+  };
+  el.addEventListener("input", sync);
+  sync();
+}
+
+bindRange("quiet_zone", "mm", 1);
+bindRange("module_height", "mm", 0);
+bindRange("module_width", "mm", 2);
+bindRange("font_size", "pt", 0);
+
+let timer = null;
+$("sns").addEventListener("input", () => {
+  clearTimeout(timer);
+  timer = setTimeout(updatePreview, 400);
+});
+
+$("file").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const txt = reader.result.replace(/\r/g, "");
+    $("sns").value = ($("sns").value.trim() + "\n" + txt).trim();
+    updatePreview();
+  };
+  reader.readAsText(f, "utf-8");
+  e.target.value = "";
+});
+
+$("clearBtn").addEventListener("click", () => {
+  $("sns").value = "";
+  updatePreview();
+});
+
+function setMsg(text, cls) {
+  const m = $("msg");
+  m.textContent = text;
+  m.className = "msg " + (cls || "");
+}
+
+$("genBtn").addEventListener("click", () => {
+  const uniq = refreshCount();
+  if (!uniq.length) { setMsg("请先输入 SN", "err"); return; }
+  $("formSns").value = uniq.join("\n");
+  $("formQuiet").value = opts.quiet_zone;
+  $("formHeight").value = opts.module_height;
+  $("formWidth").value = opts.module_width;
+  $("formFont").value = opts.font_size;
+  setMsg("正在生成 " + uniq.length + " 个条码，浏览器将开始下载...", "ok");
+  $("genForm").submit();
+});
+
+updatePreview();
+</script>
+</body>
+</html>
