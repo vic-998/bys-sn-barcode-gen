@@ -51,6 +51,12 @@
   }
   .preview-box svg { max-width: 100%; height: auto; }
   .preview-box img { max-width: 100%; height: auto; }
+  .size-line {
+    margin-top: 10px; font-size: 13px; color: #334155;
+    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
+    padding: 8px 12px; font-family: Consolas, monospace;
+  }
+  .size-line b { color: #1d4ed8; }
   .preview-box .empty { color: #94a3b8; font-size: 13px; }
   .msg { margin-top: 12px; font-size: 13px; }
   .msg.err { color: #dc2626; }
@@ -95,13 +101,18 @@
       <label>文字大小</label>
       <input type="range" id="font_size" min="6" max="20" step="1" value="10" />
       <span class="val" id="font_size_v">10 pt</span>
+
+      <label>文字间距</label>
+      <input type="range" id="text_distance" min="0.5" max="6" step="0.5" value="1.5" />
+      <span class="val" id="text_distance_v">1.5 mm</span>
     </div>
-    <p class="hint">黑条白底，SVG 矢量按比例缩放打印，任意尺寸都清晰。</p>
+    <p class="hint">文字间距 = 条码底部到 SN 文字的距离。设为 0.5~2mm 更紧凑。</p>
   </div>
 
   <div class="card">
     <h2>3. 效果预览</h2>
     <div class="preview-box" id="preview"><span class="empty">输入第一个 SN 后自动预览</span></div>
+    <div class="size-line" id="sizeLine"></div>
     <div class="msg" id="msg"></div>
   </div>
 
@@ -117,13 +128,14 @@
       <input type="hidden" name="module_height" id="formHeight" />
       <input type="hidden" name="module_width" id="formWidth" />
       <input type="hidden" name="font_size" id="formFont" />
+      <input type="hidden" name="text_distance" id="formTextDist" />
     </form>
   </div>
 </div>
 
 <script>
 const $ = (id) => document.getElementById(id);
-const opts = { quiet_zone: 2, module_height: 15, module_width: 0.3, font_size: 10 };
+const opts = { quiet_zone: 2, module_height: 15, module_width: 0.3, font_size: 10, text_distance: 1.5 };
 
 function query() {
   return new URLSearchParams(opts).toString();
@@ -146,6 +158,7 @@ function updatePreview() {
   const box = $("preview");
   if (!uniq.length) {
     box.innerHTML = '<span class="empty">输入第一个 SN 后自动预览</span>';
+    $("sizeLine").textContent = "";
     return;
   }
   const img = document.createElement("img");
@@ -154,6 +167,18 @@ function updatePreview() {
   img.src = "/api/preview?sn=" + encodeURIComponent(uniq[0]) + "&" + query() + "&t=" + Date.now();
   box.innerHTML = "";
   box.appendChild(img);
+  updateSize(uniq[0]);
+}
+
+function updateSize(sn) {
+  fetch("/api/size?sn=" + encodeURIComponent(sn) + "&" + query())
+    .then(r => r.json())
+    .then(d => {
+      if (d.error) { $("sizeLine").textContent = ""; return; }
+      $("sizeLine").innerHTML =
+        "打印尺寸（100% 缩放）：宽 <b>" + d.width_mm + " mm</b> × 高 <b>" + d.height_mm + " mm</b>";
+    })
+    .catch(() => { $("sizeLine").textContent = ""; });
 }
 
 function bindRange(id, unit, digits) {
@@ -171,6 +196,7 @@ bindRange("quiet_zone", "mm", 1);
 bindRange("module_height", "mm", 0);
 bindRange("module_width", "mm", 2);
 bindRange("font_size", "pt", 0);
+bindRange("text_distance", "mm", 1);
 
 let timer = null;
 $("sns").addEventListener("input", () => {
@@ -210,6 +236,7 @@ $("genBtn").addEventListener("click", () => {
   $("formHeight").value = opts.module_height;
   $("formWidth").value = opts.module_width;
   $("formFont").value = opts.font_size;
+  $("formTextDist").value = opts.text_distance;
   setMsg("正在生成 " + uniq.length + " 个条码，浏览器将开始下载...", "ok");
   $("genForm").submit();
 });

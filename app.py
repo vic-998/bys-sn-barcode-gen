@@ -45,12 +45,24 @@ def make_svg(sn, opts):
             "module_width": opts["module_width"],
             "font_size": opts["font_size"],
             "quiet_zone": opts["quiet_zone"],
+            "text_distance": opts["text_distance"],
             "background": "white",
             "foreground": "black",
         },
         text="SN:" + sn,
     )
     return buf.getvalue()
+
+
+SIZE_RE = re.compile(r'width="([\d.]+)mm"\s+height="([\d.]+)mm"')
+
+
+def svg_dimensions(sn, opts):
+    match = SIZE_RE.search(make_svg(sn, opts).decode("utf-8"))
+    if not match:
+        return None
+    return round(float(match.group(1)), 2), round(float(match.group(2)), 2)
+
 
 
 def parse_sns(payload):
@@ -86,6 +98,18 @@ def preview():
     return svg, 200, {"Content-Type": "image/svg+xml; charset=utf-8"}
 
 
+@app.route("/api/size")
+def size():
+    sn = clean_sn(request.args.get("sn", ""))
+    if not re.fullmatch(r"[0-9A-Za-z]+", sn or ""):
+        return jsonify({"error": "SN 只能包含数字或字母"}), 400
+    opts = read_options(request.args)
+    dims = svg_dimensions(sn, opts)
+    if not dims:
+        return jsonify({"error": "无法计算尺寸"}), 500
+    return jsonify({"sn": sn, "width_mm": dims[0], "height_mm": dims[1]})
+
+
 def read_options(src):
     def num(key, default, lo, hi):
         try:
@@ -99,6 +123,7 @@ def read_options(src):
         "module_height": num("module_height", 15.0, 5.0, 60.0),
         "module_width": num("module_width", 0.3, 0.1, 2.0),
         "font_size": num("font_size", 10.0, 4.0, 40.0),
+        "text_distance": num("text_distance", 1.5, 0.5, 10.0),
     }
 
 
